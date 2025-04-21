@@ -238,3 +238,124 @@
   )
 )
 
+(define-public (resolve-game (game-id uint) (seed (buff 32)) (outcome-data (string-utf8 1024)) (winner (optional principal)))
+  (let (
+    (game-data (unwrap! (map-get? games { game-id: game-id }) (err "Game not found")))
+    (current-block (get-block-info? block-height 0))
+  )
+    (asserts! (is-eq (get creator game-data) tx-sender) (err "Only creator can resolve"))
+    (asserts! (is-eq (get state game-data) STATE_ACTIVE) (err "Game must be active"))
+    (asserts! (verify-commit seed (get commit-hash game-data)) (err "Invalid seed for commit"))
+    (asserts! (is-some current-block) (err "Failed to get current block"))
+    
+    ;; Store result
+    (map-set game-results
+      { game-id: game-id }
+      {
+        winner: winner,
+        random-seed: seed,
+        outcome-data: outcome-data,
+        resolved-at: (unwrap-panic current-block)
+      }
+    )
+    
+    ;; Update game state
+    (map-set games
+      { game-id: game-id }
+      (merge game-data { state: STATE_COMPLETED })
+    )
+    
+    (ok true)
+  )
+)
+
+(define-public (claim-prize (game-id uint))
+  (let (
+    (game-data (unwrap! (map-get? games { game-id: game-id }) (err "Game not found")))
+    (result-data (unwrap! (map-get? game-results { game-id: game-id }) (err "Game not resolved")))
+    (player-data (unwrap! (map-get? game-participants { game-id: game-id, player: tx-sender }) (err "Not a participant")))
+    (winner (unwrap! (get winner result-data) (err "No winner declared")))
+  )
+    (asserts! (is-eq (get state game-data) STATE_COMPLETED) (err "Game not completed"))
+    (asserts! (is-eq winner tx-sender) (err "Not the winner"))
+    (asserts! (not (get has-claimed player-data)) (err "Already claimed"))
+    
+    ;; Transfer prize
+    (try! (as-contract (stx-transfer? (get prize-pool game-data) (as-contract tx-sender) tx-sender)))
+    
+    ;; Mark as claimed
+    (map-set game-participants
+      { game-id: game-id, player: tx-sender }
+      (merge player-data { has-claimed: true })
+    )
+    
+    (ok true)
+  )
+)
+
+(define-public (mint-game-asset (game-id uint) (asset-id uint) (token-id uint) (metadata-url (string-utf8 256)))
+  (let (
+    (game-data (unwrap! (map-get? games { game-id: game-id }) (err "Game not found")))
+  )
+    (asserts! (is-eq (get creator game-data) tx-sender) (err "Only creator can mint assets"))
+    (asserts! (is-none (map-get? game-assets { game-id: game-id, asset-id: asset-id })) (err "Asset ID already exists"))
+    
+    ;; Store the asset
+    (map-set game-assets
+      { game-id: game-id, asset-id: asset-id }
+      {
+        owner: (get creator game-data),
+        token-id: token-id,
+        metadata-url: metadata-url
+      }
+    )
+    
+    (ok true)
+  )
+)
+
+(define-public (transfer-game-asset (game-id uint) (asset-id uint) (recipient principal))
+  (let (
+    (asset-data (unwrap! (map-get? game-assets { game-id: game-id, asset-id: asset-id }) (err "Asset not found")))
+  )
+    (asserts! (is-eq (get owner asset-data) tx-sender) (err "Not the asset owner"))
+    
+    ;; Transfer the asset
+    (map-set game-assets
+      { game-id: game-id, asset-id: asset-id }
+      (merge asset-data { owner: recipient })
+    )
+    
+    (ok true)
+  )
+)
+
+(define-read-only (get-game-info (game-id uint))
+  (map-get? games { game-id: game-id })
+)
+
+(define-read-only (get-game-result (game-id uint))
+  (map-get? game-results { game-id: game-id })
+)
+
+(define-read-only (get-game-asset (game-id uint) (asset-id uint))
+  (map-get? game-assets { game-id: game-id, asset-id: asset-id })
+)
+
+(define-read-only (get-player-status (game-id uint) (player principal))
+  (map-get? game-participants { game-id: game-id, player: player })
+)
+
+
+(define-read-only (is-player-winner (game-id uint) (player principal))
+  (let (
+    (result-data (unwrap! (map-get? game-results { game-id: game-id }) (err false)))
+    (winner (unwrap! (get winner result-data) (err false)))
+  )
+    (is-eq winner player)
+  )
+)
+
+(define-read-only (get-total-games)
+  (var-get last-game-id)
+)
