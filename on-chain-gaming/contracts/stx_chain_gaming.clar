@@ -238,3 +238,33 @@
   )
 )
 
+(define-public (resolve-game (game-id uint) (seed (buff 32)) (outcome-data (string-utf8 1024)) (winner (optional principal)))
+  (let (
+    (game-data (unwrap! (map-get? games { game-id: game-id }) (err "Game not found")))
+    (current-block (get-block-info? block-height 0))
+  )
+    (asserts! (is-eq (get creator game-data) tx-sender) (err "Only creator can resolve"))
+    (asserts! (is-eq (get state game-data) STATE_ACTIVE) (err "Game must be active"))
+    (asserts! (verify-commit seed (get commit-hash game-data)) (err "Invalid seed for commit"))
+    (asserts! (is-some current-block) (err "Failed to get current block"))
+    
+    ;; Store result
+    (map-set game-results
+      { game-id: game-id }
+      {
+        winner: winner,
+        random-seed: seed,
+        outcome-data: outcome-data,
+        resolved-at: (unwrap-panic current-block)
+      }
+    )
+    
+    ;; Update game state
+    (map-set games
+      { game-id: game-id }
+      (merge game-data { state: STATE_COMPLETED })
+    )
+    
+    (ok true)
+  )
+)
