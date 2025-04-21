@@ -64,3 +64,65 @@
 )
 
 (define-data-var last-game-id uint 0)
+
+
+(define-private (generate-next-game-id)
+  (let ((next-id (+ (var-get last-game-id) 1)))
+    (var-set last-game-id next-id)
+    next-id
+  )
+)
+
+(define-private (is-game-admin)
+  (is-eq tx-sender GAMES_ADMIN)
+)
+
+(define-private (get-entry-fee (game-id uint))
+  (default-to 0 (get entry-fee (map-get? games { game-id: game-id })))
+)
+
+(define-private (calculate-prize-pool (game-id uint))
+  (let (
+    (game-data (unwrap! (map-get? games { game-id: game-id }) (err "Game not found")))
+    (entry-fee (get entry-fee game-data))
+    (current-players (get current-players game-data))
+  )
+    (* entry-fee current-players)
+  )
+)
+
+(define-private (verify-commit (seed (buff 32)) (commit-hash (buff 32)))
+  (is-eq (sha256 seed) commit-hash)
+)
+
+(define-public (create-game 
+  (game-type (string-ascii 20))
+  (entry-fee uint)
+  (max-players uint)
+  (commit-hash (buff 32))
+)
+  (let (
+    (game-id (generate-next-game-id))
+    (current-block (get-block-info? block-height 0))
+  )
+    (asserts! (> max-players 1) (err "Game must allow at least 2 players"))
+    (asserts! (is-some current-block) (err "Failed to get current block"))
+    
+    (map-set games
+      { game-id: game-id }
+      {
+        creator: tx-sender,
+        block-created: (unwrap-panic current-block),
+        state: STATE_PENDING,
+        game-type: game-type,
+        entry-fee: entry-fee,
+        current-players: 0,
+        max-players: max-players,
+        prize-pool: 0,
+        commit-hash: commit-hash
+      }
+    )
+    (ok game-id)
+  )
+)
+
