@@ -33,3 +33,34 @@
     commit-hash: (buff 32)
   }
 )
+
+
+(define-map game-participants
+  { game-id: uint, player: principal }
+  {
+    joined-at: uint,
+    has-claimed: bool
+  }
+)
+
+(define-map game-assets
+  { game-id: uint, asset-id: uint }
+  {
+    owner: principal,
+    token-id: uint,
+    metadata-url: (string-utf8 256)
+  }
+)
+
+
+(define-map game-results
+  { game-id: uint }
+  {
+    winner: (optional principal),
+    random-seed: (buff 32),
+    outcome-data: (string-utf8 1024),
+    resolved-at: uint
+  }
+)
+
+(define-data-var last-game-id uint 0)
