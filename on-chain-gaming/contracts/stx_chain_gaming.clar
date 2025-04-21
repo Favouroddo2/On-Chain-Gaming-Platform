@@ -15,3 +15,21 @@
 ;; Define constants for provable fairness
 (define-constant MAX_ENTROPY_AGE 144) ;; ~24 hours in blocks
 (define-constant GAMES_ADMIN tx-sender)
+
+
+
+;; Main storage maps
+(define-map games
+  { game-id: uint }
+  {
+    creator: principal,
+    block-created: uint,
+    state: uint,
+    game-type: (string-ascii 20),
+    entry-fee: uint,
+    current-players: uint,
+    max-players: uint,
+    prize-pool: uint,
+    commit-hash: (buff 32)
+  }
+)
