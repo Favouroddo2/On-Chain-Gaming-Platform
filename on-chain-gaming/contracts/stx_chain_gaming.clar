@@ -126,3 +126,19 @@
   )
 )
 
+(define-public (start-game (game-id uint))
+  (let (
+    (game-data (unwrap! (map-get? games { game-id: game-id }) (err "Game not found")))
+  )
+    (asserts! (is-eq (get creator game-data) tx-sender) (err "Only the creator can start the game"))
+    (asserts! (is-eq (get state game-data) STATE_PENDING) (err "Game must be in pending state"))
+    (asserts! (> (get current-players game-data) 1) (err "Need at least 2 players to start"))
+    
+    (map-set games
+      { game-id: game-id }
+      (merge game-data { state: STATE_ACTIVE })
+    )
+    (ok true)
+  )
+)
+
