@@ -268,3 +268,27 @@
     (ok true)
   )
 )
+
+(define-public (claim-prize (game-id uint))
+  (let (
+    (game-data (unwrap! (map-get? games { game-id: game-id }) (err "Game not found")))
+    (result-data (unwrap! (map-get? game-results { game-id: game-id }) (err "Game not resolved")))
+    (player-data (unwrap! (map-get? game-participants { game-id: game-id, player: tx-sender }) (err "Not a participant")))
+    (winner (unwrap! (get winner result-data) (err "No winner declared")))
+  )
+    (asserts! (is-eq (get state game-data) STATE_COMPLETED) (err "Game not completed"))
+    (asserts! (is-eq winner tx-sender) (err "Not the winner"))
+    (asserts! (not (get has-claimed player-data)) (err "Already claimed"))
+    
+    ;; Transfer prize
+    (try! (as-contract (stx-transfer? (get prize-pool game-data) (as-contract tx-sender) tx-sender)))
+    
+    ;; Mark as claimed
+    (map-set game-participants
+      { game-id: game-id, player: tx-sender }
+      (merge player-data { has-claimed: true })
+    )
+    
+    (ok true)
+  )
+)
