@@ -157,3 +157,84 @@
   )
 )
 
+(define-public (join-game (game-id uint))
+  (let (
+    (game-data (unwrap! (map-get? games { game-id: game-id }) (err "Game not found")))
+    (current-block (get-block-info? block-height 0))
+    (entry-fee (get entry-fee game-data))
+    (current-players (get current-players game-data))
+    (max-players (get max-players game-data))
+  )
+    (asserts! (is-eq (get state game-data) STATE_PENDING) (err "Game is not accepting players"))
+    (asserts! (< current-players max-players) (err "Game is full"))
+    (asserts! (is-none (map-get? game-participants { game-id: game-id, player: tx-sender })) (err "Already joined"))
+    (asserts! (is-some current-block) (err "Failed to get current block"))
+    
+    ;; Handle payment
+    (if (> entry-fee 0)
+      (begin
+        (try! (stx-transfer? entry-fee tx-sender (as-contract tx-sender)))
+        (map-set games
+          { game-id: game-id }
+          (merge game-data {
+            current-players: (+ current-players 1),
+            prize-pool: (+ (get prize-pool game-data) entry-fee)
+          })
+        )
+      )
+      (map-set games
+        { game-id: game-id }
+        (merge game-data {
+          current-players: (+ current-players 1)
+        })
+      )
+    )
+    
+    ;; Record participation
+    (map-set game-participants
+      { game-id: game-id, player: tx-sender }
+      { 
+        joined-at: (unwrap-panic current-block),
+        has-claimed: false
+      }
+    )
+    
+    (ok true)
+  )
+)
+
+(define-public (leave-game (game-id uint))
+  (let (
+    (game-data (unwrap! (map-get? games { game-id: game-id }) (err "Game not found")))
+    (player-data (unwrap! (map-get? game-participants { game-id: game-id, player: tx-sender }) (err "Not a participant")))
+    (entry-fee (get entry-fee game-data))
+  )
+    (asserts! (is-eq (get state game-data) STATE_PENDING) (err "Can only leave pending games"))
+    
+    ;; Refund entry fee
+    (if (> entry-fee 0)
+      (begin
+        (try! (as-contract (stx-transfer? entry-fee (as-contract tx-sender) tx-sender)))
+        (map-set games
+          { game-id: game-id }
+          (merge game-data {
+            current-players: (- (get current-players game-data) 1),
+            prize-pool: (- (get prize-pool game-data) entry-fee)
+          })
+        )
+      )
+      (map-set games
+        { game-id: game-id }
+        (merge game-data {
+          current-players: (- (get current-players game-data) 1)
+        })
+      )
+    )
+    
+    ;; Remove participation record
+    (map-delete game-participants { game-id: game-id, player: tx-sender })
+    
+    (ok true)
+  )
+)
+
