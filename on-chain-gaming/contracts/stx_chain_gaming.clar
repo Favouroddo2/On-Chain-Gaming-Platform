@@ -313,3 +313,35 @@
     (ok true)
   )
 )
+
+(define-public (transfer-game-asset (game-id uint) (asset-id uint) (recipient principal))
+  (let (
+    (asset-data (unwrap! (map-get? game-assets { game-id: game-id, asset-id: asset-id }) (err "Asset not found")))
+  )
+    (asserts! (is-eq (get owner asset-data) tx-sender) (err "Not the asset owner"))
+    
+    ;; Transfer the asset
+    (map-set game-assets
+      { game-id: game-id, asset-id: asset-id }
+      (merge asset-data { owner: recipient })
+    )
+    
+    (ok true)
+  )
+)
+
+(define-read-only (get-game-info (game-id uint))
+  (map-get? games { game-id: game-id })
+)
+
+(define-read-only (get-game-result (game-id uint))
+  (map-get? game-results { game-id: game-id })
+)
+
+(define-read-only (get-game-asset (game-id uint) (asset-id uint))
+  (map-get? game-assets { game-id: game-id, asset-id: asset-id })
+)
+
+(define-read-only (get-player-status (game-id uint) (player principal))
+  (map-get? game-participants { game-id: game-id, player: player })
+)
