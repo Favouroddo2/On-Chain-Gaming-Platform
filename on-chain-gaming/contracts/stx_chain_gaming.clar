@@ -345,3 +345,17 @@
 (define-read-only (get-player-status (game-id uint) (player principal))
   (map-get? game-participants { game-id: game-id, player: player })
 )
+
+
+(define-read-only (is-player-winner (game-id uint) (player principal))
+  (let (
+    (result-data (unwrap! (map-get? game-results { game-id: game-id }) (err false)))
+    (winner (unwrap! (get winner result-data) (err false)))
+  )
+    (is-eq winner player)
+  )
+)
+
+(define-read-only (get-total-games)
+  (var-get last-game-id)
+)
