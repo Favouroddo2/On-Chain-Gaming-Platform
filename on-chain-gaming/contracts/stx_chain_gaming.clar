@@ -142,3 +142,18 @@
   )
 )
 
+(define-public (cancel-game (game-id uint))
+  (let (
+    (game-data (unwrap! (map-get? games { game-id: game-id }) (err "Game not found")))
+  )
+    (asserts! (or (is-eq (get creator game-data) tx-sender) (is-game-admin)) (err "Unauthorized"))
+    (asserts! (is-eq (get state game-data) STATE_PENDING) (err "Can only cancel pending games"))
+    
+    (map-set games
+      { game-id: game-id }
+      (merge game-data { state: STATE_CANCELLED })
+    )
+    (ok true)
+  )
+)
+
