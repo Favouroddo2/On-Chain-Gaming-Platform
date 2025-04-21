@@ -292,3 +292,24 @@
     (ok true)
   )
 )
+
+(define-public (mint-game-asset (game-id uint) (asset-id uint) (token-id uint) (metadata-url (string-utf8 256)))
+  (let (
+    (game-data (unwrap! (map-get? games { game-id: game-id }) (err "Game not found")))
+  )
+    (asserts! (is-eq (get creator game-data) tx-sender) (err "Only creator can mint assets"))
+    (asserts! (is-none (map-get? game-assets { game-id: game-id, asset-id: asset-id })) (err "Asset ID already exists"))
+    
+    ;; Store the asset
+    (map-set game-assets
+      { game-id: game-id, asset-id: asset-id }
+      {
+        owner: (get creator game-data),
+        token-id: token-id,
+        metadata-url: metadata-url
+      }
+    )
+    
+    (ok true)
+  )
+)
